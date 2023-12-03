@@ -58,6 +58,7 @@ func (app *Application) AddToCart() gin.HandlerFunc {
 func (app *Application) RemoveItem() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		productQueryID := c.Query("ID")
+
 		if productQueryID == "" {
 			log.Println("product id is empty")
 			_ = c.AbortWithError(http.StatusBadRequest, errors.New("product id is empty"))
