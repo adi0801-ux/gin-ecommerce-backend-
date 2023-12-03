@@ -83,7 +83,7 @@ func BuyItemFromCart(ctx context.Context, userCollection *mongo.Collection, user
 	orderCart.Order_Cart = make([]models.ProductUser, 0)
 	orderCart.Payment_Method.COD = true
 
-	unwind := bson.D{{Key: "$unwind", Value: bson.D{{primitive.E{Key: "path", Value: "$usercart"}}}}}
+	unwind := bson.D{{Key: "$unwind", Value: bson.D{primitive.E{Key: "path", Value: "$usercart"}}}}
 	grouping := bson.D{{Key: "$group", Value: bson.D{primitive.E{Key: "_id", Value: "$_id"}, {Key: "total", Value: bson.D{primitive.E{Key: "$sum", Value: "$usercart.price"}}}}}}
 	currentresults, err := userCollection.Aggregate(ctx, mongo.Pipeline{unwind, grouping})
 	ctx.Done()
@@ -126,6 +126,33 @@ func BuyItemFromCart(ctx context.Context, userCollection *mongo.Collection, user
 	return nil
 }
 
-func InstantBuyer() {
-
+func InstantBuyer(ctx context.Context, prodCollection, userCollection *mongo.Collection, userID string, productID primitive.ObjectID) error {
+	id, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		log.Println(err)
+	}
+	var product_details models.ProductUser
+	var orders_details models.Order
+	orders_details.Order_ID = primitive.NewObjectID()
+	orders_details.Order_At = time.Now()
+	orders_details.Order_Cart = make([]models.ProductUser, 0)
+	orders_details.Payment_Method.COD = true
+	err = prodCollection.FindOne(ctx, bson.D{primitive.E{Key: "_id", Value: productID}}).Decode(&product_details)
+	if err != nil {
+		log.Println(err)
+	}
+	orders_details.Price = product_details.Price
+	filter := bson.D{primitive.E{Key: "_id", Value: id}}
+	update := bson.D{{Key: "$push", Value: bson.D{primitive.E{Key: "orders", Value: orders_details}}}}
+	_, err = userCollection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		log.Println(err)
+	}
+	filter2 := bson.D{primitive.E{Key: "_id", Value: id}}
+	update2 := bson.M{"$push": bson.M{"orders.$[].order_list": product_details}}
+	_, err = userCollection.UpdateOne(ctx, filter2, update2)
+	if err != nil {
+		log.Println(err)
+	}
+	return nil
 }
