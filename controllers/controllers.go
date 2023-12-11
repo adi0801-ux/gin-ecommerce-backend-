@@ -2,7 +2,9 @@ package controllers
 
 import (
 	"context"
+	"ecommerce/database"
 	"ecommerce/models"
+	"ecommerce/tokens"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -15,8 +17,8 @@ import (
 	"time"
 )
 
-var userCollection *mongo.Collection
-var productCollection *mongo.Collection
+var userCollection *mongo.Collection = database.UserData(database.Client, "Users")
+var productCollection *mongo.Collection = database.ProductData(database.Client, "Products")
 var Validate = validator.New()
 
 func HashPassword(password string) string {
@@ -52,7 +54,7 @@ func SignUp() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": validationErr})
 		}
 		//counts the number of documents in the MongoDB collection (UserCollection) that match the specified filter
-		count, err := UserCollection.CountDocuments(ctx, bson.M{"email": user.Email})
+		count, err := userCollection.CountDocuments(ctx, bson.M{"email": user.Email})
 		if err != nil {
 			log.Panic(err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err})
@@ -62,7 +64,7 @@ func SignUp() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "user already exist"})
 		}
 
-		count, err := UserCollection.CountDocuments(ctx, bson.M{"phone": user.Phone})
+		count, err = userCollection.CountDocuments(ctx, bson.M{"phone": user.Phone})
 		defer cancel()
 		if err != nil {
 			log.Panic(err)
@@ -80,7 +82,7 @@ func SignUp() gin.HandlerFunc {
 		user.Updated_At, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
 		user.ID = primitive.NewObjectID()
 		user.User_ID = user.ID.Hex()
-		token, refreshToken := generate.TokenGenerate(*user.Email, *user.First_Name, *user.User_ID)
+		token, refreshToken, _ := tokens.TokenGenerator(*user.Email, *user.First_Name, *user.Last_Name, user.User_ID)
 		user.Token = &token
 		user.Refresh_Token = &refreshToken
 		user.UserCart = make([]models.ProductUser, 0)
@@ -100,12 +102,13 @@ func Login() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 		defer cancel()
+		var founduser models.User
 		var user models.User
 		if err := c.BindJSON(&user); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		err := UserCollection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&founduser)
+		err := userCollection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&founduser)
 		defer cancel()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "login or password incorrect"})
@@ -118,20 +121,36 @@ func Login() gin.HandlerFunc {
 			fmt.Println(msg)
 			return
 		}
-		token, refreshToken := generate.TokenGenerator(*founderuser.Email, *founderuser.First_Name, *founderuser.Last_Name)
+		token, refreshToken, _ := tokens.TokenGenerator(*founduser.Email, *founduser.First_Name, *founduser.Last_Name, founduser.User_ID)
 		defer cancel()
 
-		generate.UpdateAllTokens(token, refreshToken, token)
+		tokens.UpdateToken(token, refreshToken, founduser.User_ID)
 		c.JSON(http.StatusFound, founduser)
 	}
 }
 func ProductViewerAdmin() gin.HandlerFunc {
-
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var products models.Product
+		defer cancel()
+		if err := c.BindJSON(&products); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "not interested"})
+			return
+		}
+		products.Product_ID = primitive.NewObjectID()
+		_, anyerr := productCollection.InsertOne(ctx, products)
+		if anyerr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "not interested"})
+			return
+		}
+		defer cancel()
+		c.JSON(http.StatusOK, "succesfully added")
+	}
 }
 func SearchProduct() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var productlist []models.Product
-		var ctx, cancel = context.Background(context.Background(), 100*time.Second)
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 		defer cancel()
 		cursor, err := productCollection.Find(ctx, bson.D{{}})
 		if err != nil {
@@ -144,7 +163,7 @@ func SearchProduct() gin.HandlerFunc {
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
-		defer cursor.Close()
+		defer cursor.Close(ctx)
 		if err := cursor.Err(); err != nil {
 			log.Println(err)
 			c.IndentedJSON(400, "invalid")

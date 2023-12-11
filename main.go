@@ -15,15 +15,15 @@ func main() {
 	if port == "" {
 		port = "8000"
 	}
-	app:= controllers.NewApplication(database.ProductData(database.Client,"Products"),database.UserData(database.C
-	router :=gin.New()
+	app := controllers.NewApplication(database.ProductData(database.Client, "Products"), database.UserData(database.Client, " Users"))
+	router := gin.New()
 	router.Use(gin.Logger())
-	router.UserRoutes(router)
+	routes.UserRoutes(router)
 	router.Use(middleware.Authentication())
 	router.GET("/addtocart", app.AddToCart())
-	router.GET("/removeitem", app.RemoveItem())
+	router.GET("removeitem", app.RemoveItem())
 	router.GET("/cartcheckout", app.BuyFromCart())
 	router.GET("/instantbuy", app.InstantBuy())
 
-	log.Fatal(router.Run(":"+port))
+	log.Fatal(router.Run(":" + port))
 }

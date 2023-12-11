@@ -24,38 +24,34 @@ type SignedDetails struct {
 	jwt.StandardClaims
 }
 
-
-func (s *SignedDetails) TokenGenerator() (signedToken string, signedRefreshToken string, err error) {
+func TokenGenerator(email string, firstname string, lastname string, uid string) (signedtoken string, signedrefreshtoken string, err error) {
 	claims := &SignedDetails{
-		Email:     s.Email,
-		FirstName: s.FirstName,
-		LastName:  s.LastName,
-		Uid:       s.Uid,
+		Email:     email,
+		FirstName: firstname,
+		LastName:  lastname,
+		Uid:       uid,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Local().Add(time.Hour * time.Duration(24)).Unix(),
 		},
 	}
-	refreshClaims := &SignedDetails{
+	refreshclaims := &SignedDetails{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Local().Add(time.Hour * time.Duration(168)).Unix(),
 		},
 	}
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SigningString([]byte(SECRET_KEY))
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(SECRET_KEY))
 	if err != nil {
 		return "", "", err
 	}
-	refreshtoken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SigningString([]byte(SECRET_KEY))
+	refreshtoken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshclaims).SignedString([]byte(SECRET_KEY))
 	if err != nil {
-		log.Panic(err)
+		log.Panicln(err)
 		return
 	}
 	return token, refreshtoken, err
-
 }
 
-
 func ValidateToken(signedtoken string) (claims *SignedDetails, msg string) {
-
 
 	token, err := jwt.ParseWithClaims(signedtoken, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(SECRET_KEY), nil
@@ -75,26 +71,26 @@ func ValidateToken(signedtoken string) (claims *SignedDetails, msg string) {
 	}
 	return claims, msg
 }
-func UpdateToken(signedtoken string , signedrefreshtoken string, userid string) {
-	var ctx, cancel = context.WithTimeout(context.Background(),100*time.Second)
+func UpdateToken(signedtoken string, signedrefreshtoken string, userid string) {
+	var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 	var updateobj primitive.D
 
-	updateobj =append(updateobj, bson.E{Key: "token", Value:signedtoken})
-	updateobj = append(updateobj, bson.E{Key: "refresh_token", Value:signedrefreshtoken})
-	updated_at, _ :=time.Parse((time.RFC3339, time.Now().Format(time.RFC3339)))
-	updateobj = append(updateobj,bson.E{Key: "updatedat",Value: updated_at})
+	updateobj = append(updateobj, bson.E{Key: "token", Value: signedtoken})
+	updateobj = append(updateobj, bson.E{Key: "refresh_token", Value: signedrefreshtoken})
+	updated_at, _ := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+	updateobj = append(updateobj, bson.E{Key: "updatedat", Value: updated_at})
 
-	upsert :=true
-	filter:=bson.M{"user_id":userid}
+	upsert := true
+	filter := bson.M{"user_id": userid}
 	opt := options.UpdateOptions{
-		Upsert:&upsert,
+		Upsert: &upsert,
 	}
-	_, err:=UserData.UpdateOne(ctx, filter,bson.D{
-		{Key: "$set",Value: updateobj},
+	_, err := UserData.UpdateOne(ctx, filter, bson.D{
+		{Key: "$set", Value: updateobj},
 	},
-	&opt)
+		&opt)
 	defer cancel()
-	if err!=nil{
+	if err != nil {
 		log.Panic(err)
 		return
 	}

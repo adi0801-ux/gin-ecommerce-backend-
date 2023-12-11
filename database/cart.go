@@ -55,7 +55,7 @@ func RemoveCartItem(ctx context.Context, prodCollection, userCollection *mongo.C
 		return ErrUserIdIsNotValid
 	}
 	filter := bson.D{primitive.E{Key: "_id", Value: id}}
-	update := bson.M{"$pull": bson.M{"usercart": bson.M{{"_id": productID}}}}
+	update := bson.M{"$pull": bson.M{"usercart": bson.M{"_id": productID}}}
 	_, err = userCollection.UpdateMany(ctx, filter, update)
 	if err != nil {
 		return ErrCantRemoveItemCart
@@ -126,7 +126,7 @@ func BuyItemFromCart(ctx context.Context, userCollection *mongo.Collection, user
 	return nil
 }
 
-func InstantBuyer(ctx context.Context, prodCollection, userCollection *mongo.Collection, userID string, productID primitive.ObjectID) error {
+func InstantBuyer(ctx context.Context, prodCollection, userCollection *mongo.Collection, productID primitive.ObjectID, userID string) error {
 	id, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		log.Println(err)
